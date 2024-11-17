@@ -1,0 +1,70 @@
+@startuml EsquemaCarreras
+entity "Carrera" as Carrera {
+    + carrera_id : SERIAL [PK]
+    --
+    nombre : VARCHAR(100)
+    fecha : DATE
+    lugar : VARCHAR(100)
+    categoria : VARCHAR(50)
+    distancia : INT
+}
+
+entity "Participante" as Participante {
+    + participante_id : SERIAL [PK]
+    --
+    nombre : VARCHAR(100)
+    edad : INT
+    genero : CHAR(1)
+}
+
+entity "Inscripcion" as Inscripcion {
+    + inscripcion_id : SERIAL [PK]
+    --
+    carrera_id : INT [FK]
+    participante_id : INT [FK]
+    fecha_inscripcion : DATE
+    estado_pago : BOOLEAN
+}
+
+entity "Tiempos" as Tiempos {
+    + tiempo_id : SERIAL [PK]
+    --
+    carrera_id : INT [FK]
+    participante_id : INT [FK]
+    tiempo : INTERVAL
+}
+
+entity "Patrocinador" as Patrocinador {
+    + patrocinador_id : SERIAL [PK]
+    --
+    nombre : VARCHAR(100)
+    monto_aportado : NUMERIC
+    carrera_id : INT [FK]
+}
+
+entity "Premio" as Premio {
+    + premio_id : SERIAL [PK]
+    --
+    carrera_id : INT [FK]
+    descripcion : VARCHAR(255)
+    monto : NUMERIC
+}
+
+entity "Mensaje" as Mensaje {
+    + mensaje_id : SERIAL [PK]
+    --
+    carrera_id : INT [FK]
+    participante_id : INT [FK]
+    contenido : TEXT
+    fecha_envio : TIMESTAMP
+}
+
+Carrera ||--o{ Inscripcion
+Participante ||--o{ Inscripcion
+Carrera ||--o{ Tiempos
+Participante ||--o{ Tiempos
+Carrera ||--o{ Patrocinador
+Carrera ||--o{ Premio
+Carrera ||--o{ Mensaje
+Participante ||--o{ Mensaje
+@enduml

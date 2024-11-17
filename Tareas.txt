@@ -1,0 +1,93 @@
+Establecer roles y permisos específicos para cada servidor (central, secundarios y terciarios), permitiendo el acceso adecuado a los datos según el rol.
+Fase 2: Configuración de Replicación
+Replicación Física (Central a Secundarios)
+
+Configurar la replicación física entre el servidor central y los servidores secundarios, asegurando que todos los datos maestros se sincronicen correctamente.
+Realizar pruebas de integridad y sincronización para verificar que los datos maestros se reflejan fielmente en los servidores secundarios.
+Replicación Lógica (Secundarios a Terciarios)
+
+Configurar la replicación lógica desde los servidores secundarios a los terciarios, asegurando que solo los datos necesarios (competidores, tiempos y mensajes) sean replicados para los servicios móviles.
+Probar que los datos replicados son consistentes y actualizados en los servidores terciarios.
+Fase 3: Implementación de Consultas y Servicios
+Consultas de Tiempos y Participantes
+
+Implementar consultas para mostrar el historial de tiempos de un participante, consultar detalles de carrera, participantes, y tiempos por categoría.
+Servicios de Mensajería
+
+Desarrollar el servicio de chat entre participantes, permitiendo el registro de mensajes y la consulta de mensajes anteriores.
+Servicios Móviles
+
+Preparar los servicios móviles para consultar detalles de competidores y tiempos. Esto incluirá endpoints para que las aplicaciones móviles accedan a datos almacenados en los servidores terciarios.
+Fase 4: Configuración de Jobs Programados
+Sincronización y Limpieza de Mensajes de Chat (Servidor Central)
+
+Crear un job programado para eliminar automáticamente los mensajes de chat de más de 30 días.
+Configurar un log de auditoría para registrar la cantidad de mensajes eliminados y cualquier error.
+Actualización de Estadísticas de Carreras (Servidores Secundarios)
+
+Crear una tabla EstadísticasCarreras para almacenar estadísticas (número de participantes, promedio de tiempos) y un job que la actualice semanalmente.
+Sincronización de Patrocinadores y Premios (Secundarios a Terciarios)
+
+Configurar un job de replicación lógica para sincronizar los datos de patrocinadores y premios hacia los servidores terciarios.
+
+
+
+#Nota para las replicar me aparecio esto en la fisica
+
+1. Servidor central 
+-Editar el archivo postgresql.Conf
+
+wal_level = replica
+max_wal_senders = 3       # Número máximo de conexiones de replicación
+wal_keep_segments = 64    # Para garantizar que los WAL necesarios estén disponibles
+
+-Configurar el acceso en pg_hba.conf
+host    replication     replicator      <IP_SERVIDOR_SECUNDARIO>/32     md5
+
+-El usuario de replicacion ya esta creado entonces no hace falta pero no estoy seguro si hace falta un rol para los patrocinadores
+
+2. Servidor Secundario 
+-Realizar un backup del central usando pg_basebackup
+pg_basebackup -h <IP_SERVIDOR_CENTRAL> -D /var/lib/postgresql/data -U replicator -Fp -Xs -P
+
+-Configurar/Crear (Depende de si lo tiene creado o no) el archivo recovery.conf 
+standby_mode = 'on'
+primary_conninfo = 'host=<IP_SERVIDOR_CENTRAL> port=5432 user=replicator password=replica_password'
+trigger_file = '/tmp/failover.trigger'
+
+-Iniciar el servidor secundario 
+systemctl start postgresql
+
+-Validar la replicacion
+SELECT * FROM pg_stat_replication;
+
+
+#Replicación logica
+1. Servidor Central
+-Habilitar la replicacion logica en postgresql.conf
+wal_level = logical
+max_replication_slots = 3
+max_wal_senders = 3
+
+-Reiniciar el servidor
+
+-Crear nua ranura de replicacion
+
+SELECT * FROM pg_create_logical_replication_slot('replica_logica', 'pgoutput');
+
+
+-Crear una publicacion 
+
+CREATE PUBLICATION mi_publicacion FOR TABLE carreras.Carrera, carreras.Participante;
+
+2. Servidor Terciarios
+-Crear una suscripcion
+
+CREATE SUBSCRIPTION mi_suscripcion
+CONNECTION 'host=<IP_SERVIDOR_CENTRAL> dbname=nombre_base user=replicator password=replica_password'
+PUBLICATION mi_publicacion;
+
+
+-Validar la replicacion
+
+SELECT * FROM pg_stat_subscription;
