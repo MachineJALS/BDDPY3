@@ -1,14 +1,3 @@
--- Crear un rol para consultas
-CREATE ROLE consulta_secundario WITH LOGIN PASSWORD 'consulta_password';
-
--- Otorgar permisos de SELECT a las tablas replicadas
-GRANT SELECT ON ALL TABLES IN SCHEMA carreras TO consulta_secundario;
-
--- Opcional: Crear un usuario específico para este rol
-CREATE USER usuario_consulta WITH PASSWORD 'consulta_usuario_password';
-GRANT consulta_secundario TO usuario_consulta;
-
-
 -- Consultar los tiempos registrados para un participante específico
 SELECT 
     T.participante_id, 
