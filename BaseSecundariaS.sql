@@ -1,50 +1,150 @@
--- Seleccionar base de datos (asegúrate de estar en la correcta)
-USE CarrerasDB; 
-GO
+-- Crear un rol para consultas
+CREATE ROLE consulta_secundario WITH LOGIN PASSWORD 'consulta_password';
 
--- Creación de Tablas (Estructura Replicada)
--- Estas tablas ya deberían existir debido a la replicación, pero agregamos índices locales y roles específicos.
+-- Otorgar permisos de SELECT a las tablas replicadas
+GRANT SELECT ON ALL TABLES IN SCHEMA carreras TO consulta_secundario;
 
--- Índices Locales para Optimización de Consultas
-CREATE INDEX idx_carrera_fecha ON Carrera(fecha);
-CREATE INDEX idx_participante_nombre ON Participante(nombre);
-CREATE INDEX idx_tiempos_participante_carrera ON Tiempos(participante_id, carrera_id);
-CREATE INDEX idx_mensaje_fecha ON Mensaje(fecha_envio);
+-- Opcional: Crear un usuario específico para este rol
+CREATE USER usuario_consulta WITH PASSWORD 'consulta_usuario_password';
+GRANT consulta_secundario TO usuario_consulta;
 
--- Creación de Roles y Permisos
 
--- Rol para Administradores Secundarios (Consulta y mantenimiento básico)
-CREATE LOGIN admin_secundario WITH PASSWORD = 'admin_secundario_password';
-CREATE USER admin_secundario FOR LOGIN admin_secundario;
-GRANT SELECT, INSERT, UPDATE, DELETE ON Carrera TO admin_secundario;
-GRANT SELECT, INSERT, UPDATE, DELETE ON Participante TO admin_secundario;
-GRANT SELECT, INSERT, UPDATE, DELETE ON Inscripcion TO admin_secundario;
-GRANT SELECT, INSERT, UPDATE, DELETE ON Tiempos TO admin_secundario;
-GRANT SELECT, INSERT, UPDATE, DELETE ON Patrocinador TO admin_secundario;
-GRANT SELECT, INSERT, UPDATE, DELETE ON Premio TO admin_secundario;
-GRANT SELECT, INSERT, UPDATE, DELETE ON Mensaje TO admin_secundario;
+-- Consultar los tiempos registrados para un participante específico
+SELECT 
+    T.participante_id, 
+    P.nombre, 
+    C.nombre AS carrera, 
+    T.tiempo
+FROM 
+    carreras.Tiempos T
+JOIN 
+    carreras.Participante P ON T.participante_id = P.participante_id
+JOIN 
+    carreras.Carrera C ON T.carrera_id = C.carrera_id
+WHERE 
+    T.participante_id = $1 -- Variable en formato de PostgreSQL
+ORDER BY 
+    T.tiempo;
 
--- Rol para Usuarios de Solo Consulta
-CREATE LOGIN consulta_secundario WITH PASSWORD = 'consulta_secundario_password';
-CREATE USER consulta_secundario FOR LOGIN consulta_secundario;
-GRANT SELECT ON Carrera TO consulta_secundario;
-GRANT SELECT ON Participante TO consulta_secundario;
-GRANT SELECT ON Inscripcion TO consulta_secundario;
-GRANT SELECT ON Tiempos TO consulta_secundario;
-GRANT SELECT ON Patrocinador TO consulta_secundario;
-GRANT SELECT ON Premio TO consulta_secundario;
-GRANT SELECT ON Mensaje TO consulta_secundario;
+-- Consultar todos los detalles de una carrera específica
+SELECT 
+    C.carrera_id, 
+    C.nombre, 
+    C.fecha, 
+    C.lugar, 
+    C.categoria, 
+    C.distancia, 
+    COUNT(I.inscripcion_id) AS total_participantes
+FROM 
+    carreras.Carrera C
+LEFT JOIN 
+    carreras.Inscripcion I ON C.carrera_id = I.carrera_id
+WHERE 
+    C.carrera_id = $1
+GROUP BY 
+    C.carrera_id, C.nombre, C.fecha, C.lugar, C.categoria, C.distancia;
 
--- Rol para Mantenimiento de Estadísticas
-CREATE LOGIN estadisticas_secundario WITH PASSWORD = 'estadisticas_password';
-CREATE USER estadisticas_secundario FOR LOGIN estadisticas_secundario;
-GRANT SELECT, INSERT, UPDATE ON EstadisticasCarreras TO estadisticas_secundario;
+-- Listar los participantes inscritos en una carrera específica
+SELECT 
+    P.participante_id, 
+    P.nombre, 
+    P.edad, 
+    P.genero
+FROM 
+    carreras.Inscripcion I
+JOIN 
+    carreras.Participante P ON I.participante_id = P.participante_id
+WHERE 
+    I.carrera_id = $1
+ORDER BY 
+    P.nombre;
 
--- Creación de Tabla de Estadísticas (Solo en Secundarios)
-CREATE TABLE EstadisticasCarreras (
-    estadistica_id INT IDENTITY(1,1) PRIMARY KEY,
-    carrera_id INT NOT NULL REFERENCES Carrera(carrera_id),
-    total_participantes INT NOT NULL,
-    tiempo_promedio NUMERIC(10, 2) NOT NULL,
-    fecha_calculo DATETIME DEFAULT GETDATE()
-);
+-- Consultar los premios asociados a una carrera específica
+SELECT 
+    PR.premio_id, 
+    PR.descripcion, 
+    PR.monto, 
+    PA.nombre AS patrocinador
+FROM 
+    carreras.Premio PR
+JOIN 
+    carreras.Patrocinador PA ON PR.carrera_id = PA.carrera_id
+WHERE 
+    PR.carrera_id = $1;
+
+-- Consultar los patrocinadores de una carrera específica
+SELECT 
+    PA.patrocinador_id, 
+    PA.nombre, 
+    PA.monto_aportado
+FROM 
+    carreras.Patrocinador PA
+WHERE 
+    PA.carrera_id = $1
+ORDER BY 
+    PA.nombre;
+
+-- Consultar los tiempos registrados en una carrera específica 
+SELECT 
+    T.participante_id, 
+    P.nombre, 
+    T.tiempo
+FROM 
+    carreras.Tiempos T
+JOIN 
+    carreras.Participante P ON T.participante_id = P.participante_id
+WHERE 
+    T.carrera_id = $1
+ORDER BY 
+    T.tiempo ASC; -- Menor tiempo primero
+
+-- Consultar el resumen de participantes en una carrera específica
+SELECT 
+    COUNT(I.participante_id) AS total_participantes,
+    AVG(P.edad) AS edad_promedio,
+    SUM(CASE WHEN P.genero = 'M' THEN 1 ELSE 0 END) AS total_hombres,
+    SUM(CASE WHEN P.genero = 'F' THEN 1 ELSE 0 END) AS total_mujeres
+FROM 
+    carreras.Inscripcion I
+JOIN 
+    carreras.Participante P ON I.participante_id = P.participante_id
+WHERE 
+    I.carrera_id = $1;
+
+-- Consulta las carreras disponibles por fecha 
+SELECT 
+    carrera_id, 
+    nombre, 
+    fecha, 
+    lugar, 
+    categoria, 
+    distancia
+FROM 
+    carreras.Carrera
+WHERE 
+    fecha BETWEEN $1 AND $2
+ORDER BY 
+    fecha ASC;
+
+-- Consultar los mensajes más recientes de un participante en una carrera
+SELECT 
+    M.mensaje_id, 
+    M.contenido, 
+    M.fecha_envio
+FROM 
+    carreras.Mensaje M
+WHERE 
+    M.carrera_id = $1
+    AND M.participante_id = $2
+ORDER BY 
+    M.fecha_envio DESC
+LIMIT 10; -- Los 10 mensajes más recientes
+
+-- Consulta de premios por carrera
+SELECT 
+    COUNT(PR.premio_id) AS total_premios,
+    SUM(PR.monto) AS monto_total
+FROM 
+    carreras.Premio PR
+WHERE 
+    PR.carrera_id = $1;
