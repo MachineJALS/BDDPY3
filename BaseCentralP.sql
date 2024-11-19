@@ -61,6 +61,15 @@ CREATE TABLE carreras.Mensaje (
     fecha_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE carreras.EstadisticasCarreras (
+    estadistica_id SERIAL PRIMARY KEY,
+    carrera_id INT NOT NULL,
+    total_participantes INT,
+    tiempo_promedio INTERVAL,
+    fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
 -- Crear índices para optimización de consultas frecuentes
 CREATE INDEX idx_carrera_fecha ON carreras.Carrera(fecha);
 CREATE INDEX idx_participante_nombre ON carreras.Participante(nombre);
@@ -84,3 +93,17 @@ GRANT USAGE ON SCHEMA carreras TO replicacion;
 -- Rol para Chat (Lectura y escritura en Mensaje)
 CREATE ROLE chat_user WITH LOGIN PASSWORD 'chat_password';
 GRANT SELECT, INSERT ON carreras.Mensaje TO chat_user;
+
+-- Jobs
+
+-- Crear Job para limpiar mensajes antiguos
+CREATE OR REPLACE FUNCTION limpiar_mensajes_chat()
+RETURNS void AS $$
+BEGIN
+    DELETE FROM carreras.Mensaje
+    WHERE fecha_envio < NOW() - INTERVAL '30 days';
+END;
+$$ LANGUAGE plpgsql;
+
+-- Agregar la tarea programada (ejecutar diariamente a medianoche)
+SELECT cron.schedule('LimpiezaMensajesChat', '0 0 * * *', 'SELECT limpiar_mensajes_chat();');

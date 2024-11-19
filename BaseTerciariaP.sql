@@ -50,3 +50,24 @@ CREATE TABLE servicios_movil.Auditoria (
     descripcion TEXT,
     fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Crear la función para actualizar patrocinadores y premios
+CREATE OR REPLACE FUNCTION actualizar_patrocinadores_premios(patrocinador_id INT, nombre VARCHAR, monto NUMERIC, premio_id INT, descripcion VARCHAR, monto_premio NUMERIC)
+RETURNS void AS $$
+BEGIN
+    -- Actualizar o insertar patrocinadores
+    INSERT INTO servicios_movil.Patrocinador (patrocinador_id, nombre, monto)
+    VALUES (patrocinador_id, nombre, monto)
+    ON CONFLICT (patrocinador_id) DO UPDATE
+    SET nombre = EXCLUDED.nombre, monto = EXCLUDED.monto;
+
+    -- Actualizar o insertar premios
+    INSERT INTO servicios_movil.Premio (premio_id, descripcion, monto)
+    VALUES (premio_id, descripcion, monto_premio)
+    ON CONFLICT (premio_id) DO UPDATE
+    SET descripcion = EXCLUDED.descripcion, monto = EXCLUDED.monto;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Configurar job opcional (solo si necesitas ejecutarlo localmente)
+SELECT cron.schedule('ActualizarPatrocinadoresPremios', '0 */6 * * *', 'SELECT actualizar_patrocinadores_premios();');
