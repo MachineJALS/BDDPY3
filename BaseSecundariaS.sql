@@ -123,8 +123,8 @@ SELECT
 FROM 
     carreras.Mensaje M
 WHERE 
-    M.carrera_id = $1
-    AND M.participante_id = $2
+    M.carrera_id = 3
+    AND M.participante_id = 5
 ORDER BY 
     M.fecha_envio DESC
 LIMIT 10; -- Los 10 mensajes más recientes
@@ -136,36 +136,13 @@ SELECT
 FROM 
     carreras.Premio PR
 WHERE 
-    PR.carrera_id = $1;
+    PR.carrera_id = 2;
 
--- Funcion para calcular las estadisticas de una carrera
-CREATE OR REPLACE FUNCTION calcular_estadisticas_carreras()
-RETURNS void AS $$
-BEGIN
-    INSERT INTO carreras.EstadisticasCarreras (carrera_id, total_participantes, tiempo_promedio)
-    SELECT 
-        C.carrera_id, 
-        COUNT(I.participante_id) AS total_participantes,
-        AVG(T.tiempo) AS tiempo_promedio
-    FROM 
-        carreras.Carrera C
-    LEFT JOIN 
-        carreras.Inscripcion I ON C.carrera_id = I.carrera_id
-    LEFT JOIN 
-        carreras.Tiempos T ON C.carrera_id = T.carrera_id
-    GROUP BY 
-        C.carrera_id;
-END;
-$$ LANGUAGE plpgsql;
-
--- Agregar el job para estadísticas (cada lunes a medianoche)
-SELECT cron.schedule('CalculoEstadisticasCarreras', '0 0 * * 1', 'SELECT calcular_estadisticas_carreras();');
-
--- Crear la función para sincronizar datos
-CREATE OR REPLACE FUNCTION sincronizar_patrocinadores_premios()
-RETURNS TABLE (patrocinador_id INT, nombre VARCHAR, monto NUMERIC, premio_id INT, descripcion VARCHAR, monto_premio NUMERIC) AS $$
-BEGIN
-    RETURN QUERY
+-- Configurar el job para ejecutar la consulta cada 6 horas
+SELECT cron.schedule(
+    'SincronizacionPatrocinadoresPremios',
+    '0 */6 * * *', -- Cada 6 horas
+    $$ 
     SELECT 
         PA.patrocinador_id, 
         PA.nombre, 
@@ -177,8 +154,8 @@ BEGIN
         carreras.Patrocinador PA
     JOIN 
         carreras.Premio PR ON PA.carrera_id = PR.carrera_id;
-END;
-$$ LANGUAGE plpgsql;
+    $$ -- Consulta directa a ejecutar
+);
 
--- Configurar el job usando pg_cron (ejecución cada 6 horas)
-SELECT cron.schedule('SincronizacionPatrocinadoresPremios', '0 */6 * * *', 'SELECT sincronizar_patrocinadores_premios();');
+SELECT cron.run_job('SincronizacionPatrocinadoresPremios');
+
